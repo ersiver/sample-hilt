@@ -1,0 +1,163 @@
+
+This app was built following AndroidDevelopers Codelabs. The app demonstrates use of Hilt library.
+
+Hilt provides a standard way to do DI injection in your application by providing containers to every Android component in your project and managing the container's lifecycle automatically. This is done by leveraging the popular DI library: Dagger.
+
+### Implementing dependency injection provides you with the following advantages:
++ Reusability of code.
++ Ease of refactoring.
++ Ease of testing.
+
+A container is a class which is in charge of providing dependencies in your codebase and knows how to create instances of other types of your app.
+
+It manages the graph of dependencies required to provide those instances by creating them and managing their lifecycle.
+
+A container exposes methods to get instances of the types it provides. 
+Those methods can always return a different instance or the same instance. 
+If the method always provides the same instance, we say that the type is scoped to the container.
+
+
+### Use hilt:
++ Add Gradle plugin (project build.gradle)
+buildscript {
+    ...
+    ext.hilt_version = '2.28-alpha'
+    dependencies {
+        ...
+        classpath "com.google.dagger:hilt-android-gradle-plugin:$hilt_version"
+    }
+}
+
++ Apply the plugin (app/build.gradle)
+apply plugin: 'dagger.hilt.android.plugin
+
++ library dependencies:
+
+implementation "com.google.dagger:hilt-android:$hilt_version"
+    kapt "com.google.dagger:hilt-android-compiler:$hilt_version" 
+
+### @HiltAndroidApp Annotation
++ To create a parent container of dependencies that is attached to the app's lifecycle, we need to annotate the Application class with @HiltAndroidApp.
+
++  @HiltAndroidApp triggers Hilt's code generation. 
+
++ The application container is the parent container of the app, which means that other containers can access the dependencies that it provides.
+
+
+### @AndroidEntryPoint
+
++ Annotating Android classes with @AndroidEntryPoint creates a dependencies container.
+
++ The container will be attched to that class and its lifecycle and will be able to inject instances to that class.
+
++ To provide instances we use use field injection -> we annotate the field we want to be provided (injected) with @Inject annotation.
+
++ Fields injected by Hilt cannot be private.
+
++ Under the hood, Hilt will populate fields annotaded with @Inject in the onAttach() lifecycle method with instances built in the automatically generated LogsFragment's dependencies container.
+
++ The information Hilt has about how to provide instances of different types are called bindings.
+
++ To tell Hilt how bind instance of the class object add the @Inject annotation to the constructor of that class.
+
+### Scoping an instance to a container 
++ Scoping an instance to a container -> means Hilt will provide always the same instance of class object, whenever it's called.
+
++ As Hilt can produce different containers that have different lifecycles, there are different annotations that scope to those containers.
+
++ The annotation that scopes an instance to the application container is @Singleton. This annotation will make the application container always provide the same instance regardless of whether the type is used as a dependency of another type or if it needs to be field injected. Bindings available in containers higher up in the hierarchy, are also available in lower levels of the hierarchy. 
+
++ The same logic can be applied to all containers attached to Android classes. For example, if you want an activity container to always provide the same instance of a type, you can annotate that type with @ActivityScoped.
+
+### Modules
++ Modules are used to add bindings to Hilt (to tell Hilt how to provide instances of different types).
+
++ Modules include bindings for types that cannot be constructor injected such as interfaces or classes that are not contained in your project (e.g. OkHttpClient - you need to use its builder to create an instance) 
+
++ A Hilt module is a class annotated with @Module and @InstallIn. 
+
++ @Module tells Hilt this is a module.
+
++ @InstallIn tells Hilt in which containers the bindings are available: @InstallIn(ApplicationComponent::class)
+
++ Functions inside the modules are annotaded with @Binds or @Provides. 
+
++ The return type of the @Provides-annotated function tells Hilt the binding's type or how to provide instances of that type. The function parameters are the dependencies of the type. E.g:
+
+@Provides
+    fun provideLogDao(database: AppDatabase): LogDao {
+        return database.logDao()
+    }
+
++ To tell Hilt what implementation to use for an interface, use the @Binds annotation on a function inside a Hilt module. @Binds must annotate an abstract function. The return type of the abstract function is the interface we want to provide an implementation.
+
++ Hilt Modules cannot contain both non-static and abstract binding methods, so you cannot place @Binds and @Provides annotations in the same class
+
++ In Kotlin, modules that only contain @Provides functions can be object classes. In this way, providers get optimized and almost in-lined in generated code.
+
++ If @Binds or @Provides are used as a binding for a type, the scoping annotations in the type are not required.
+
++ For better organization, a module's name should convey the type of information it provides
+
++ Each Hilt container comes with a set of default bindings that can be injected as dependencies into your custom bindings. For example, as you might need the Context class from either the application or the activity, Hilt provides the @ApplicationContext and @ActivityContext qualifiers
+
+
+### Qualifiers
++ A qualifier is an annotation used to identify a binding. It's used in the situation when we have e.g. two implementations for the same interface.
++ If there is more than one implementation of the same interface we define binding for each of them in the Modules. 
++ To avoid DuplicateBindings error we have  explicityly tell Hitl which implementation to bing with a qualifier annotation.
++ We need to define separate qualifier for each bingding module.
++ Then we have to add Qualifier annotation in 2 places: in the class next to the @Inject annotation for the injected field and above the module function.
+
+
+### Components
+For each Android class that can be injected by Hilt, there's an associated Hilt Component:
+ApplicationComponent	     -> injector for Application
+ActivityRetainedComponent -> injector for ViewModel
+ActivityComponent         -> injector for Activity
+FragmentComponent         -> injector for Fragment
+ViewComponent		     -> injector for View
+ViewWithFragmentComponent -> injector for  View annotated with @WithFragmentBindings
+ServiceComponent 	     -> injector for Service
+
+Bindings available in containers higher up in the hierarchy, are also available in lower levels of the hierarchy. E.g. if instance is provided in the Activity container it's also available in a Fragment container and a View container.
+
+Hilt automatically creates and destroys instances of generated component classes following the lifecycle of the corresponding Android classes.
+
+
+
+### @EntryPoint
++ Hilt comes with support for the most common Android components. However, you might need to perform field injection in classes that either are not supported directly by Hilt or cannot use Hilt. In those cases, you can use @EntryPoint
+
++ An entry point is an interface with an accessor method for each binding type we want (including its qualifier). Also, the interface must be annotated with @InstallIn to specify the component in which to install the entry point. The best practice is adding the new entry point interface inside the class that uses it.
+
++ Interface is annotated with the @EntryPoint and it's installed in the required component. Inside the interface we expose methods for the bindings we want to access.
+
+### Testing
+
++ Dependencies:
+
+    // Hilt testing dependency
+    androidTestImplementation "com.google.dagger:hilt-android-testing:$hilt_version"
+    // Make Hilt generate code in the androidTest folder
+    kaptAndroidTest "com.google.dagger:hilt-android-compiler:$hilt_version"
+
++ Testing with Hilt requires no maintenance because Hilt automatically generates a new set of components for each test/
+
++ Instrumented tests using Hilt need to be executed in an Application that supports Hilt. The library already comes with HiltTestApplication that we can use to run our UI tests. Specifying the Application to use in tests is done by creating a new test runner in the project: Create CustomTestRunner extending AndroidJUnitRunner(). In the app/build.gradle file: replace the default testInstrumentationRunner content with: "com.example.android.hilt.CustomTestRunner"
+
++ For an emulator test class to use Hilt, it needs to be annotated with @HiltAndroidTest, which is responsible for generating the Hilt components for each test
+
++ Use the HiltAndroidRule that manages the components' state and is used to perform injection on your test (HiltAndroidRule(this)).
+
+
+### Licence
+Copyright (C) 2020 The Android Open Source Project (all resources are from Codelabs Google Developers).
+
+
+
+
+
+
+
+
